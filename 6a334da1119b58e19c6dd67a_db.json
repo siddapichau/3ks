@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "settings": {
+    "tema": "auto",
+    "moeda": "BRL"
+  },
+  "lancamentos": [
+    {
+      "id": "seed-1",
+      "data": "2026-06-01",
+      "tipo": "receita",
+      "categoria": "Salário",
+      "descricao": "Salário (exemplo)",
+      "valor": 3500,
+      "dataCriacao": "2026-06-01T09:00:00.000Z"
+    },
+    {
+      "id": "seed-2",
+      "data": "2026-06-03",
+      "tipo": "despesa",
+      "categoria": "Alimentação",
+      "descricao": "Supermercado (exemplo)",
+      "valor": 280.55,
+      "dataCriacao": "2026-06-03T10:00:00.000Z"
+    }
+  ]
+}
