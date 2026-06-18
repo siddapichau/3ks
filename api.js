@@ -14,8 +14,8 @@
    */
   const APP_CONFIG = {
     appName: "FinControl Pro",
-    apiBaseUrl: "COLE_AQUI_A_URL_DO_WEB_APP_GOOGLE_APPS_SCRIPT",
-    googleClientId: "COLE_AQUI_O_CLIENT_ID_DO_GOOGLE_OAUTH",
+    apiBaseUrl: "",
+    googleClientId: "183884459409-mvfkdvh37siaquiun8piuraeb1qrojec.apps.googleusercontent.com",
     defaultCurrency: "BRL",
     cacheKeys: {
       auth: "fincontrol_auth",
