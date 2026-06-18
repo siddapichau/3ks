@@ -3,7 +3,7 @@
  * Os dados dinâmicos são guardados no localStorage pelo frontend.
  */
 // Bump do cache para forçar atualização quando houver ajustes de layout/estilo.
-const CACHE_NAME = "fincontrol-pro-v2";
+const CACHE_NAME = "fincontrol-pro-v4";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -18,7 +18,7 @@ const APP_SHELL = [
   "./manifest.json",
   "./icons/icon-192.svg",
   "./icons/icon-512.svg",
-  "https://accounts.google.com/gsi/client",
+  "./data/db.json",
   "https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js",
   "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
 ];

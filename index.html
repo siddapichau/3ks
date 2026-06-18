@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta
       name="description"
-      content="Sistema financeiro pessoal multiusuário com Google Sheets, Google Apps Script e PWA."
+      content="Sistema financeiro pessoal moderno e responsivo (modo local), com PWA e gráficos."
     />
     <meta name="theme-color" content="#0f172a" />
     <meta name="color-scheme" content="light dark" />
@@ -31,8 +31,6 @@
       body { margin: 0; font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; }
       .is-hidden { display: none !important; }
       .app-shell { min-height: 100vh; }
-      .login-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.7); display: grid; place-items: center; padding: 24px; }
-      .login-card { width: min(100%, 460px); padding: 24px; border-radius: 18px; background: rgba(15,23,42,.88); color: #e2e8f0; border: 1px solid rgba(148,163,184,.18); }
     </style>
   </head>
   <body>
@@ -122,7 +120,7 @@
               <div class="user-box__avatar" id="user-avatar">FC</div>
               <div class="user-box__meta">
                 <strong id="user-name">Visitante</strong>
-                <small id="user-email">Faça login para continuar</small>
+                <small id="user-email">Sem login (temporário)</small>
               </div>
               <button id="logout-button" class="btn btn--ghost" type="button">Sair</button>
             </div>
@@ -340,6 +338,14 @@
                   <button id="save-settings-button" class="btn" type="button">
                     Salvar preferências
                   </button>
+
+                  <button id="reload-seed-button" class="btn btn--secondary" type="button">
+                    Restaurar dados do arquivo
+                  </button>
+
+                  <button id="reset-local-button" class="btn btn--danger" type="button">
+                    Apagar dados deste dispositivo
+                  </button>
                 </div>
               </article>
 
@@ -347,12 +353,12 @@
                 <div class="panel__header">
                   <div>
                     <h2>Sobre o projeto</h2>
-                    <p>Aplicação web responsiva pronta para GitHub Pages e Google Apps Script.</p>
+                    <p>Aplicação web responsiva pronta para GitHub + Vercel (modo local por enquanto).</p>
                   </div>
                 </div>
                 <ul class="feature-list">
-                  <li>Login com Google OAuth</li>
-                  <li>Separação total dos dados por usuário</li>
+                  <li>Modo local (sem login) por enquanto</li>
+                  <li>Dados salvos no dispositivo (localStorage)</li>
                   <li>PWA instalável em Android e iPhone</li>
                   <li>Modo offline para consulta</li>
                   <li>Exportação em CSV e Excel</li>
@@ -362,102 +368,6 @@
             </div>
           </section>
         </main>
-      </div>
-    </div>
-
-    <div id="login-overlay" class="login-overlay">
-      <div class="login-card">
-        <img class="login-hero" src="assets/login-hero.svg" alt="" loading="eager" />
-        <div class="brand brand--centered">
-          <div class="brand__icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" focusable="false">
-              <path
-                d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5v-11Zm3 1.5a1 1 0 0 0-1 1v6.5a1 1 0 0 0 1.707.707l2.764-2.764a1 1 0 0 1 1.414 0l1.414 1.414a1 1 0 0 0 1.414 0l4.293-4.293A1 1 0 0 0 18.293 9H7Z"
-              />
-            </svg>
-          </div>
-          <div>
-            <strong>FinControl Pro</strong>
-            <span>Controle financeiro pessoal e multiusuário</span>
-          </div>
-        </div>
-
-        <h2>Entrar</h2>
-        <p>
-          Acesse sua conta para ver apenas os seus lançamentos. Se não tiver conta, crie agora.
-        </p>
-
-        <div class="auth-tabs" role="tablist" aria-label="Autenticação">
-          <button id="auth-tab-login" class="auth-tab is-active" type="button" role="tab">
-            Login
-          </button>
-          <button id="auth-tab-register" class="auth-tab" type="button" role="tab">
-            Cadastro
-          </button>
-        </div>
-
-        <div id="auth-panel-login" class="auth-panel" role="tabpanel">
-          <form id="login-form" class="auth-form">
-            <label class="field">
-              <span>E-mail</span>
-              <input id="login-email" type="email" inputmode="email" autocomplete="email" required />
-            </label>
-            <label class="field">
-              <span>Senha</span>
-              <input
-                id="login-password"
-                type="password"
-                autocomplete="current-password"
-                minlength="6"
-                required
-              />
-            </label>
-            <button class="btn btn--block" type="submit">Entrar</button>
-          </form>
-        </div>
-
-        <div id="auth-panel-register" class="auth-panel is-hidden" role="tabpanel">
-          <form id="register-form" class="auth-form">
-            <label class="field">
-              <span>Nome</span>
-              <input id="register-name" type="text" autocomplete="name" required />
-            </label>
-            <label class="field">
-              <span>E-mail</span>
-              <input id="register-email" type="email" inputmode="email" autocomplete="email" required />
-            </label>
-            <label class="field">
-              <span>Senha</span>
-              <input
-                id="register-password"
-                type="password"
-                autocomplete="new-password"
-                minlength="6"
-                required
-              />
-            </label>
-            <label class="field">
-              <span>Confirmar senha</span>
-              <input
-                id="register-password-confirm"
-                type="password"
-                autocomplete="new-password"
-                minlength="6"
-                required
-              />
-            </label>
-            <button class="btn btn--block" type="submit">Criar conta</button>
-          </form>
-          <button id="auth-demo-fill" class="btn btn--secondary btn--block" type="button">
-            Preencher exemplo
-          </button>
-        </div>
-
-        <div class="login-card__info">
-          <small>
-            Antes de publicar, configure a URL do Apps Script em `js/api.js`.
-          </small>
-        </div>
       </div>
     </div>
 
@@ -518,6 +428,7 @@
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
     <script src="js/api.js"></script>
+    <!-- AuthModule fica em modo local (sem login/cadastro) -->
     <script src="js/auth.js"></script>
     <script src="js/dashboard.js"></script>
     <script src="js/charts.js"></script>

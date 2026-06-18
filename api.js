@@ -1,20 +1,27 @@
 /* eslint-disable no-console */
-/* global window, fetch */
+/* global window, fetch, localStorage */
 
 /**
- * Camada central de comunicação com o backend Google Apps Script.
- * Todas as chamadas da aplicação passam por este módulo.
+ * Camada central de dados (modo local).
+ *
+ * IMPORTANTE (sobre “banco de dados no GitHub”):
+ * - O arquivo `data/db.json` fica no repositório e é SOMENTE leitura no navegador.
+ * - Alterações feitas pelo usuário são salvas no `localStorage` do dispositivo (modo offline-friendly).
+ * - Para salvar alterações “de volta no GitHub”, seria necessário backend e autenticação (não recomendado no frontend).
  */
 (function initApiModule(global) {
   "use strict";
 
-  /**
-   * Configurações globais da aplicação.
-   * Substitua os valores abaixo antes de publicar o projeto.
-   */
   const APP_CONFIG = {
     appName: "FinControl Pro",
-    apiBaseUrl: "COLE_AQUI_A_URL_DO_WEB_APP_GOOGLE_APPS_SCRIPT",
+    /**
+     * Modo atual:
+     * - "local": usa `data/db.json` como seed + localStorage para persistência no dispositivo
+     * - "apps_script": (opcional no futuro) usar Google Apps Script
+     */
+    storageMode: "local",
+    seedUrl: "data/db.json",
+    localDbKey: "fincontrol_local_db_v1",
     defaultCurrency: "BRL",
     cacheKeys: {
       auth: "fincontrol_auth",
@@ -25,173 +32,187 @@
     }
   };
 
-  /**
-   * Remove barras finais para evitar rotas duplicadas.
-   */
-  function normalizeBaseUrl(url) {
-    return String(url || "").replace(/\/+$/, "");
+  let initPromise = null;
+
+  function nowIso() {
+    return new Date().toISOString();
   }
 
-  /**
-   * Constrói a URL final da rota, preservando filtros em query string.
-   */
-  function buildUrl(route, queryParams) {
-    const baseUrl = normalizeBaseUrl(APP_CONFIG.apiBaseUrl);
-    const url = new URL(`${baseUrl}/${route.replace(/^\/+/, "")}`);
-
-    Object.entries(queryParams || {}).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== "") {
-        url.searchParams.set(key, value);
-      }
-    });
-
-    return url.toString();
-  }
-
-  /**
-   * Lê o token de sessão salvo localmente.
-   */
-  function getSavedSession() {
-    const rawSession = localStorage.getItem(APP_CONFIG.cacheKeys.auth);
-    return rawSession ? JSON.parse(rawSession) : null;
-  }
-
-  /**
-   * Persiste o último momento de sincronização para a interface.
-   */
   function saveLastSync() {
-    localStorage.setItem(APP_CONFIG.cacheKeys.lastSync, new Date().toISOString());
+    localStorage.setItem(APP_CONFIG.cacheKeys.lastSync, nowIso());
   }
 
-  /**
-   * Formata respostas com validação consistente.
-   */
-  async function parseResponse(response) {
-    const text = await response.text();
-    const payload = text ? JSON.parse(text) : {};
-
-    if (!response.ok || payload.success === false) {
-      throw new Error(payload.message || "Não foi possível concluir a operação.");
+  function safeJsonParse(value, fallback) {
+    try {
+      return value ? JSON.parse(value) : fallback;
+    } catch (error) {
+      return fallback;
     }
-
-    return payload;
   }
 
-  /**
-   * Envia requisições simples compatíveis com Apps Script.
-   * O backend usa POST com _method quando é necessário simular PUT/DELETE.
-   */
-  async function request(method, route, data, queryParams) {
-    if (!APP_CONFIG.apiBaseUrl || APP_CONFIG.apiBaseUrl.includes("COLE_AQUI")) {
-      throw new Error("Configure a URL do Google Apps Script em js/api.js.");
+  async function loadSeed() {
+    const response = await fetch(APP_CONFIG.seedUrl, { cache: "no-cache" });
+    if (!response.ok) {
+      throw new Error("Não foi possível carregar o banco local (data/db.json).");
     }
-
-    const url = buildUrl(route, queryParams);
-    const session = getSavedSession();
-
-    if (method === "GET") {
-      const getParams = Object.assign({}, queryParams, session ? { token: session.token } : {});
-      return parseResponse(await fetch(buildUrl(route, getParams), { method: "GET" }));
-    }
-
-    const payload = Object.assign({}, data || {}, session ? { token: session.token } : {});
-
-    return parseResponse(
-      await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "text/plain;charset=utf-8"
-        },
-        body: JSON.stringify({
-          _method: method,
-          ...payload
-        })
-      })
-    );
+    return response.json();
   }
 
-  /**
-   * API pública consumida pelos demais módulos.
-   */
+  function readDbFromStorage() {
+    return safeJsonParse(localStorage.getItem(APP_CONFIG.localDbKey), null);
+  }
+
+  function writeDbToStorage(db) {
+    localStorage.setItem(APP_CONFIG.localDbKey, JSON.stringify(db));
+    // Mantém compatibilidade com cache/offline já existente no app.
+    localStorage.setItem(APP_CONFIG.cacheKeys.settings, JSON.stringify(db.settings || {}));
+    localStorage.setItem(APP_CONFIG.cacheKeys.lancamentos, JSON.stringify(db.lancamentos || []));
+    saveLastSync();
+  }
+
+  async function ensureDb() {
+    const existing = readDbFromStorage();
+    if (existing && Array.isArray(existing.lancamentos)) {
+      return existing;
+    }
+
+    const seed = await loadSeed();
+    const db = {
+      version: seed.version || 1,
+      settings: seed.settings || { tema: "auto", moeda: APP_CONFIG.defaultCurrency },
+      lancamentos: Array.isArray(seed.lancamentos) ? seed.lancamentos : []
+    };
+    writeDbToStorage(db);
+    return db;
+  }
+
+  function summarizeEntries(entries) {
+    const totalReceitas = entries
+      .filter((entry) => entry.tipo === "receita")
+      .reduce((sum, entry) => sum + Number(entry.valor || 0), 0);
+
+    const totalDespesas = entries
+      .filter((entry) => entry.tipo === "despesa")
+      .reduce((sum, entry) => sum + Number(entry.valor || 0), 0);
+
+    const now = new Date();
+    const month = now.getMonth();
+    const year = now.getFullYear();
+
+    const economiaMes = entries.reduce((sum, entry) => {
+      const entryDate = new Date(entry.data + "T12:00:00");
+      const isCurrentMonth = entryDate.getMonth() === month && entryDate.getFullYear() === year;
+      if (!isCurrentMonth) {
+        return sum;
+      }
+      return sum + (entry.tipo === "receita" ? Number(entry.valor || 0) : Number(entry.valor || 0) * -1);
+    }, 0);
+
+    return {
+      saldoAtual: totalReceitas - totalDespesas,
+      totalReceitas,
+      totalDespesas,
+      economiaMes,
+      quantidadeLancamentos: entries.length,
+      referencia: "Modo local"
+    };
+  }
+
+  function createId() {
+    if (global.crypto?.randomUUID) {
+      return global.crypto.randomUUID();
+    }
+    return `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
   const FinanceAPI = {
     config: APP_CONFIG,
 
-    /**
-     * Realiza autenticação com e-mail e senha.
-     */
-    async login(email, senha) {
-      const response = await request("POST", "/login", { email, senha });
-
-      saveLastSync();
-      return response;
+    init() {
+      if (!initPromise) {
+        initPromise = ensureDb().catch((error) => {
+          console.error(error);
+          // Mesmo que falhe o seed, tenta iniciar vazio para o app abrir.
+          const db = {
+            version: 1,
+            settings: { tema: "auto", moeda: APP_CONFIG.defaultCurrency },
+            lancamentos: []
+          };
+          writeDbToStorage(db);
+          return db;
+        });
+      }
+      return initPromise;
     },
 
-    /**
-     * Cria um novo usuário (cadastro) e já retorna sessão ativa.
-     */
-    async register(nome, email, senha) {
-      const response = await request("POST", "/register", { nome, email, senha });
-      saveLastSync();
-      return response;
+    async getDashboard() {
+      const db = await ensureDb();
+      return {
+        data: {
+          dashboard: summarizeEntries(db.lancamentos),
+          settings: db.settings
+        }
+      };
     },
 
-    /**
-     * Busca o resumo do dashboard do usuário.
-     */
-    async getDashboard(filters) {
-      const response = await request("GET", "/dashboard", null, filters || {});
-      saveLastSync();
-      return response;
+    async getLancamentos() {
+      const db = await ensureDb();
+      return {
+        data: {
+          lancamentos: db.lancamentos
+        }
+      };
     },
 
-    /**
-     * Lista lançamentos com os filtros selecionados.
-     */
-    async getLancamentos(filters) {
-      const response = await request("GET", "/lancamentos", null, filters || {});
-      saveLastSync();
-      return response;
-    },
-
-    /**
-     * Cria um novo lançamento financeiro.
-     */
     async createLancamento(payload) {
-      const response = await request("POST", "/lancamentos", payload);
-      saveLastSync();
-      return response;
+      const db = await ensureDb();
+      const item = {
+        id: createId(),
+        data: String(payload.data || "").slice(0, 10),
+        tipo: payload.tipo,
+        categoria: payload.categoria,
+        descricao: String(payload.descricao || "").trim(),
+        valor: Number(payload.valor || 0),
+        dataCriacao: nowIso()
+      };
+      db.lancamentos.push(item);
+      writeDbToStorage(db);
+      return { data: { lancamento: item } };
     },
 
-    /**
-     * Atualiza um lançamento existente.
-     */
     async updateLancamento(payload) {
-      const response = await request("PUT", "/lancamentos", payload);
-      saveLastSync();
-      return response;
+      const db = await ensureDb();
+      const id = String(payload.id || "");
+      const index = db.lancamentos.findIndex((item) => String(item.id) === id);
+      if (index === -1) {
+        throw new Error("Lançamento não encontrado.");
+      }
+      db.lancamentos[index] = Object.assign({}, db.lancamentos[index], {
+        data: String(payload.data || "").slice(0, 10),
+        tipo: payload.tipo,
+        categoria: payload.categoria,
+        descricao: String(payload.descricao || "").trim(),
+        valor: Number(payload.valor || 0)
+      });
+      writeDbToStorage(db);
+      return { data: { lancamento: db.lancamentos[index] } };
     },
 
-    /**
-     * Exclui um lançamento existente.
-     */
     async deleteLancamento(id) {
-      const response = await request("DELETE", "/lancamentos", { id });
-      saveLastSync();
-      return response;
+      const db = await ensureDb();
+      const normalizedId = String(id || "");
+      db.lancamentos = db.lancamentos.filter((item) => String(item.id) !== normalizedId);
+      writeDbToStorage(db);
+      return { data: {} };
     },
 
-    /**
-     * Salva preferências do usuário no backend.
-     */
     async saveSettings(payload) {
-      const response = await request("POST", "/configuracoes", payload);
-      saveLastSync();
-      return response;
+      const db = await ensureDb();
+      db.settings = Object.assign({}, db.settings, payload || {});
+      writeDbToStorage(db);
+      return { data: { settings: db.settings } };
     },
 
-    /**
-     * Lê a última data de sincronização salva localmente.
-     */
     getLastSync() {
       return localStorage.getItem(APP_CONFIG.cacheKeys.lastSync);
     }
